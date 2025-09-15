@@ -7,9 +7,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Plane, Search, Download } from "lucide-react"
+import { Plane, Search, CheckCircle } from "lucide-react"
 import type { FlightData, Flight } from "@/app/page"
-import { generateTicketPDF } from "@/lib/pdf-generator"
 
 interface FlightBookingFormProps {
   flightData: FlightData
@@ -17,7 +16,7 @@ interface FlightBookingFormProps {
 }
 
 export function FlightBookingForm({ flightData, setFlightData }: FlightBookingFormProps) {
-  const [currentStep, setCurrentStep] = useState<"booking" | "flights" | "passenger">("booking")
+  const [currentStep, setCurrentStep] = useState<"booking" | "flights" | "passenger" | "complete">("booking")
   const [availableFlights, setAvailableFlights] = useState<{ outbound: Flight[]; return: Flight[] }>({
     outbound: [],
     return: [],
@@ -88,10 +87,10 @@ export function FlightBookingForm({ flightData, setFlightData }: FlightBookingFo
     setCurrentStep("passenger")
   }
 
-  const generatePDF = async () => {
+  const completeBooking = async () => {
     setIsLoading(true)
     try {
-      // First, save the ticket record via API
+      // Save the ticket record via API
       const response = await fetch("/api/tickets/generate", {
         method: "POST",
         headers: {
@@ -103,16 +102,33 @@ export function FlightBookingForm({ flightData, setFlightData }: FlightBookingFo
       const result = await response.json()
 
       if (result.success) {
-        // Then generate the PDF
-        await generateTicketPDF(flightData)
+        setCurrentStep("complete")
       } else {
         console.error("Ticket generation failed:", result.error)
       }
     } catch (error) {
-      console.error("Error generating PDF:", error)
+      console.error("Error generating ticket:", error)
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const startNewBooking = () => {
+    setFlightData({
+      tripType: "round-trip",
+      fromCity: "",
+      toCity: "",
+      departureDate: "",
+      returnDate: "",
+      passenger: {
+        title: "Mr",
+        firstName: "",
+        lastName: "",
+      },
+      selectedFlights: undefined,
+    })
+    setCurrentStep("booking")
+    setAvailableFlights({ outbound: [], return: [] })
   }
 
   if (currentStep === "booking") {
@@ -351,12 +367,37 @@ export function FlightBookingForm({ flightData, setFlightData }: FlightBookingFo
             <Button
               className="flex-1"
               disabled={!flightData.passenger.firstName || !flightData.passenger.lastName || isLoading}
-              onClick={generatePDF}
+              onClick={completeBooking}
             >
-              <Download className="h-4 w-4 mr-2" />
-              {isLoading ? "Generating..." : "Generate PDF Ticket"}
+              <CheckCircle className="h-4 w-4 mr-2" />
+              {isLoading ? "Completing..." : "Complete Booking"}
             </Button>
           </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (currentStep === "complete") {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-green-600">
+            <CheckCircle className="h-5 w-5" />
+            Booking Complete!
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="text-center py-6">
+            <p className="text-lg mb-2">Your flight ticket has been generated successfully!</p>
+            <p className="text-muted-foreground mb-4">
+              You can now print or download your ticket using the buttons in the preview panel.
+            </p>
+          </div>
+
+          <Button onClick={startNewBooking} className="w-full" variant="outline">
+            Create New Booking
+          </Button>
         </CardContent>
       </Card>
     )
